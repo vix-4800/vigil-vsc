@@ -1,0 +1,59 @@
+{
+    "name": "vigil-analyzer",
+    "displayName": "Vigil PHP Analyzer",
+    "description": "Analyze PHP code for undocumented @throws tags using Vigil",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.105.0"
+    },
+    "categories": [
+        "Linters"
+    ],
+    "activationEvents": [
+        "onLanguage:php"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "vigil.analyzeFile",
+                "title": "Vigil: Analyze Current File"
+            }
+        ],
+        "configuration": {
+            "title": "Vigil PHP Analyzer",
+            "properties": {
+                "vigil.executablePath": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Path to vigil executable. If empty, will search in workspace and PATH"
+                },
+                "vigil.analyzeOnSave": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically analyze PHP files on save"
+                },
+                "vigil.analyzeOnOpen": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically analyze PHP files when opened"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "pretest": "npm run compile",
+        "lint": "eslint src --ext ts"
+    },
+    "devDependencies": {
+        "@types/node": "^24.0",
+        "@types/vscode": "^1.105.0",
+        "@typescript-eslint/eslint-plugin": "^8.0",
+        "@typescript-eslint/parser": "^8.0",
+        "eslint": "^9.0",
+        "typescript": "^5.0"
+    }
+}
