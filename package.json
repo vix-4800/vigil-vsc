@@ -42,6 +42,11 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Automatically analyze PHP files when opened"
+                },
+                "vigil.noProjectScan": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Disable automatic project-wide scanning (faster but less accurate for single files)"
                 }
             }
         }

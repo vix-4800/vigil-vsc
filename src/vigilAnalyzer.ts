@@ -118,7 +118,15 @@ export class VigilAnalyzer {
    */
   private runVigil(vigilPath: string, filePath: string): Promise<VigilResult> {
     return new Promise((resolve, reject) => {
-      const process = child_process.spawn(vigilPath, [filePath]);
+      const config = vscode.workspace.getConfiguration('vigil');
+      const noProjectScan = config.get<boolean>('noProjectScan', false);
+
+      const args = [filePath];
+      if (noProjectScan) {
+        args.unshift('--no-project-scan');
+      }
+
+      const process = child_process.spawn(vigilPath, args);
       let stdout = '';
       let stderr = '';
 
