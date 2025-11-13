@@ -2,6 +2,11 @@
     "name": "vigil-analyzer",
     "displayName": "Vigil PHP Analyzer",
     "description": "Analyze PHP code for undocumented @throws tags using Vigil",
+    "publisher": "vix",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/vix-4800/vigil-vsc"
+    },
     "version": "0.0.1",
     "engines": {
         "vscode": "^1.105.0"
