@@ -32,10 +32,12 @@ interface VigilResult {
 export class VigilAnalyzer {
   private diagnosticCollection: vscode.DiagnosticCollection;
   private outputChannel: vscode.OutputChannel;
+  private statusBarItem: vscode.StatusBarItem;
 
   constructor(diagnosticCollection: vscode.DiagnosticCollection) {
     this.diagnosticCollection = diagnosticCollection;
     this.outputChannel = vscode.window.createOutputChannel('Vigil');
+    this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   }
 
   /**
@@ -103,6 +105,10 @@ export class VigilAnalyzer {
     this.outputChannel.appendLine(`Analyzing: ${document.fileName}`);
     this.outputChannel.appendLine(`Using Vigil: ${vigilPath}`);
 
+    // Show status bar notification
+    this.statusBarItem.text = '$(sync~spin) Vigil: Analyzing...';
+    this.statusBarItem.show();
+
     try {
       const result = await this.runVigil(vigilPath, document.fileName);
       this.processResult(document, result);
@@ -110,6 +116,9 @@ export class VigilAnalyzer {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.outputChannel.appendLine(`Error running Vigil: ${errorMessage}`);
       vscode.window.showErrorMessage(`Vigil analysis failed: ${errorMessage}`);
+    } finally {
+      // Hide status bar notification when done
+      this.statusBarItem.hide();
     }
   }
 
@@ -204,5 +213,12 @@ export class VigilAnalyzer {
 
     const errorCount = diagnostics.length;
     this.outputChannel.appendLine(`Found ${errorCount} issue(s)`);
+  }
+
+  /**
+   * Dispose of resources
+   */
+  public dispose(): void {
+    this.statusBarItem.dispose();
   }
 }

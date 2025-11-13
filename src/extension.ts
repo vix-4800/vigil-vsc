@@ -71,4 +71,7 @@ export function deactivate() {
     diagnosticCollection.clear();
     diagnosticCollection.dispose();
   }
+  if (analyzer) {
+    analyzer.dispose();
+  }
 }
