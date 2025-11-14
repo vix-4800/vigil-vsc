@@ -151,7 +151,9 @@ final class Analyzer
         }
 
         if (is_file($path)) {
-            $this->analyzeFile($path);
+            if (!$this->shouldExcludeFile($path)) {
+                $this->analyzeFile($path);
+            }
         } else {
             foreach ($this->filesToAnalyze as $file) {
                 $this->analyzeFile($file);

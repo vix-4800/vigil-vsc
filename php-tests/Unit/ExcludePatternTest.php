@@ -195,4 +195,44 @@ final class ExcludePatternTest extends TestCase
             'Should handle Windows path separators for hidden directories'
         );
     }
+
+    /**
+     * Test that directly specified vendor files are excluded
+     *
+     * @return void
+     */
+    public function testDirectlySpecifiedVendorFileIsExcluded(): void
+    {
+        $testDir = sys_get_temp_dir() . '/php-exception-inspector-test-' . uniqid();
+        mkdir($testDir);
+
+        $vendorDir = $testDir . '/vendor/package';
+        mkdir($vendorDir, 0777, true);
+
+        $vendorFile = $vendorDir . '/VendorClass.php';
+        file_put_contents($vendorFile, '<?php
+namespace Vendor\Package;
+
+class VendorClass {
+    public function method() {
+        throw new \Exception("test");
+    }
+}
+');
+
+        try {
+            $analyzer = new Analyzer();
+            $result = $analyzer->analyze($vendorFile, false);
+
+            $this->assertIsArray($result);
+            $this->assertArrayHasKey('summary', $result);
+            $this->assertEquals(0, $result['summary']['total_files'], 'Should not analyze vendor files even when directly specified');
+            $this->assertEmpty($result['files'], 'Should have no files in results');
+        } finally {
+            unlink($vendorFile);
+            rmdir($vendorDir);
+            rmdir(dirname($vendorDir));
+            rmdir($testDir);
+        }
+    }
 }
