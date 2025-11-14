@@ -128,10 +128,15 @@ export class InspectorAnalyzer {
     return new Promise((resolve, reject) => {
       const config = vscode.workspace.getConfiguration('phpExceptionInspector');
       const noProjectScan = config.get<boolean>('noProjectScan', false);
+      const excludePatterns = config.get<string[]>('excludePatterns', []);
 
       const args = [filePath];
       if (noProjectScan) {
         args.unshift('--no-project-scan');
+      }
+
+      for (const pattern of excludePatterns) {
+        args.push('--exclude-pattern', pattern);
       }
 
       const process = child_process.spawn(inspectorPath, args);

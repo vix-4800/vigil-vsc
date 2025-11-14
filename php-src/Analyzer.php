@@ -71,19 +71,36 @@ final class Analyzer
     ];
 
     /**
+     * Regex patterns to exclude files/directories from analysis
+     *
+     * @var string[]
+     */
+    private array $excludePatterns = [
+        '/vendor/',
+        '/node_modules/',
+        '/\\.git/',
+        '/\\.(?:idea|vscode|cache|config)/', // Common hidden directories
+    ];
+
+    /**
      * Analyze a file or directory with optional project-wide context
      *
-     * @param string $path                   File or directory path
-     * @param bool   $useProjectWideAnalysis Whether to scan entire project for context
+     * @param string   $path                   File or directory path
+     * @param bool     $useProjectWideAnalysis Whether to scan entire project for context
+     * @param string[] $excludePatterns        Custom regex patterns to exclude files/directories
      *
      * @return array<string, mixed> Analysis results
      *
      * @throws InvalidArgumentException
      * @throws JsonException
      */
-    public function analyze(string $path, bool $useProjectWideAnalysis = true): array
+    public function analyze(string $path, bool $useProjectWideAnalysis = true, array $excludePatterns = []): array
     {
         $startTime = microtime(true);
+
+        if ($excludePatterns !== []) {
+            $this->excludePatterns = $excludePatterns;
+        }
 
         $this->results = [
             'files' => [],
@@ -152,6 +169,26 @@ final class Analyzer
         }
 
         return $this->results;
+    }
+
+    /**
+     * Check if a file should be excluded based on patterns
+     *
+     * @param string $filePath File path to check
+     *
+     * @return bool True if file should be excluded
+     */
+    private function shouldExcludeFile(string $filePath): bool
+    {
+        $normalizedPath = str_replace('\\', '/', $filePath);
+
+        foreach ($this->excludePatterns as $pattern) {
+            if (preg_match($pattern, $normalizedPath)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -344,7 +381,11 @@ final class Analyzer
             $iterator = new RecursiveIteratorIterator($filteredIterator);
 
             foreach ($iterator as $file) {
-                $this->filesToAnalyze[] = $file->getPathname();
+                $filePath = $file->getPathname();
+
+                if (!$this->shouldExcludeFile($filePath)) {
+                    $this->filesToAnalyze[] = $filePath;
+                }
             }
         } catch (Exception) {
         }
@@ -378,7 +419,11 @@ final class Analyzer
         $iterator = new RecursiveIteratorIterator($filteredIterator);
 
         foreach ($iterator as $file) {
-            $this->filesToAnalyze[] = $file->getPathname();
+            $filePath = $file->getPathname();
+
+            if (!$this->shouldExcludeFile($filePath)) {
+                $this->filesToAnalyze[] = $filePath;
+            }
         }
     }
 

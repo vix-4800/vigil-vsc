@@ -61,6 +61,19 @@
                     "minimum": 100,
                     "maximum": 10000,
                     "description": "Maximum number of log lines in the output channel before automatic cleanup (prevents memory leaks)"
+                },
+                "phpExceptionInspector.excludePatterns": {
+                    "type": "array",
+                    "default": [
+                        "/vendor/",
+                        "/node_modules/",
+                        "/\\.git/",
+                        "/\\.(?:idea|vscode|cache|config)/"
+                    ],
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Regular expression patterns to exclude files and directories from analysis. Patterns are matched against the full file path. Default patterns exclude vendor/, node_modules/, .git/, and common hidden directories."
                 }
             }
         }

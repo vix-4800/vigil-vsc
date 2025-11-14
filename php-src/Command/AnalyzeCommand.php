@@ -55,6 +55,12 @@ final class AnalyzeCommand extends Command
                 null,
                 InputOption::VALUE_NONE,
                 'Disable automatic project-wide scanning (faster but less accurate for single files)'
+            )
+            ->addOption(
+                'exclude-pattern',
+                null,
+                InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED,
+                'Regex patterns to exclude files/directories (can be specified multiple times)'
             );
     }
 
@@ -95,7 +101,13 @@ final class AnalyzeCommand extends Command
         try {
             $analyzer = new Analyzer();
             $useProjectScan = !$input->getOption('no-project-scan');
-            $results = $analyzer->analyze($path, $useProjectScan);
+            $excludePatterns = $input->getOption('exclude-pattern');
+
+            if (!is_array($excludePatterns)) {
+                $excludePatterns = [];
+            }
+
+            $results = $analyzer->analyze($path, $useProjectScan, $excludePatterns);
 
             $output->writeln(json_encode($results, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 
