@@ -3,18 +3,14 @@
 
 declare(strict_types=1);
 
-$autoloadPaths = [
-    __DIR__ . '/../vendor/autoload.php',
-    __DIR__ . '/../../../autoload.php',
-];
+$autoloadPath = __DIR__ . '/../vendor/autoload.php';
 
-foreach ($autoloadPaths as $autoloadPath) {
-    if (file_exists($autoloadPath)) {
-        require_once $autoloadPath;
-
-        break;
-    }
+if (!file_exists($autoloadPath)) {
+    fwrite(STDERR, "Error: Composer autoload not found. Please run 'composer install'.\n");
+    exit(1);
 }
+
+require_once $autoloadPath;
 
 use Symfony\Component\Console\Application;
 use Vix\ExceptionInspector\Command\AnalyzeCommand;
