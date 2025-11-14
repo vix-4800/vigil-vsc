@@ -367,46 +367,12 @@ final class ThrowsVisitor extends NodeVisitorAbstract
             return;
         }
 
-        $methodSignature = "{$calledClass}::{$methodName}";
-
-        $calledMethodThrows = $this->methodThrows[$methodSignature] ?? null;
-
-        if ($calledMethodThrows === null) {
-            $calledMethodThrows = $this->globalMethodThrows[$methodSignature] ?? null;
-        }
-
-        if (in_array($calledMethodThrows, [null, []], true)) {
-            return;
-        }
-
-        foreach ($calledMethodThrows as $thrownException) {
-            $isDocumented = false;
-
-            foreach ($this->declaredThrows as $declared) {
-                if ($this->isExceptionMatching($thrownException, $declared)) {
-                    $isDocumented = true;
-
-                    break;
-                }
-            }
-
-            $this->actuallyThrown[] = $thrownException;
-
-            if ($isDocumented) {
-                continue;
-            }
-
-            $this->errors[] = [
-                'line' => $node->getStartLine(),
-                'type' => 'undeclared_throw_from_call',
-                'exception' => $thrownException,
-                'function' => $this->currentFunction,
-                'called_method' => $methodName,
-                'called_class' => $calledClass,
-                'message' => "Exception '{$thrownException}' can be thrown by '{$methodName}()'"
-                    . ' but is not declared in @throws tag',
-            ];
-        }
+        $this->checkMethodCallThrows(
+            $node,
+            $calledClass,
+            $methodName,
+            "{$methodName}()"
+        );
     }
 
     /**
@@ -448,6 +414,30 @@ final class ThrowsVisitor extends NodeVisitorAbstract
             return;
         }
 
+        $this->checkMethodCallThrows(
+            $node,
+            $calledClass,
+            $methodName,
+            "{$calledClass}::{$methodName}()"
+        );
+    }
+
+    /**
+     * Check method call for undocumented throws
+     *
+     * @param Node   $node                   Method or static call node
+     * @param string $calledClass            Called class name
+     * @param string $methodName             Called method name
+     * @param string $displayMethodSignature Method signature for error message
+     *
+     * @return void
+     */
+    private function checkMethodCallThrows(
+        Node $node,
+        string $calledClass,
+        string $methodName,
+        string $displayMethodSignature,
+    ): void {
         $methodSignature = "{$calledClass}::{$methodName}";
 
         $calledMethodThrows = $this->methodThrows[$methodSignature] ?? null;
@@ -484,7 +474,7 @@ final class ThrowsVisitor extends NodeVisitorAbstract
                 'function' => $this->currentFunction,
                 'called_method' => $methodName,
                 'called_class' => $calledClass,
-                'message' => "Exception '{$thrownException}' can be thrown by '{$calledClass}::{$methodName}()'"
+                'message' => "Exception '{$thrownException}' can be thrown by '{$displayMethodSignature}'"
                     . ' but is not declared in @throws tag',
             ];
         }
