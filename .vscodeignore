@@ -8,7 +8,6 @@ tsconfig.json
 **/*.map
 **/*.ts
 node_modules/**
-php-src/**
 php-tests/**
 composer.json
 composer.lock
@@ -16,4 +15,5 @@ phpunit.xml
 eslint.config.mjs
 .phpunit.cache/**
 !php-bin/**
+!php-src/**
 !vendor/**
