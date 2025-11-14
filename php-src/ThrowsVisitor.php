@@ -24,6 +24,7 @@ use PhpParser\Node\Stmt\Catch_;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\Node\Stmt\Trait_;
+use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\TryCatch;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\NodeVisitorAbstract;
@@ -131,6 +132,14 @@ final class ThrowsVisitor extends NodeVisitorAbstract
     private array $classHierarchy = [];
 
     /**
+     * Map of class names to their used traits
+     * Format: ['ClassName' => ['TraitName1', 'TraitName2']]
+     *
+     * @var array<string, string[]>
+     */
+    private array $classTraits = [];
+
+    /**
      * Constructor
      *
      * @param string                  $filePath           File path being analyzed
@@ -197,9 +206,13 @@ final class ThrowsVisitor extends NodeVisitorAbstract
                     : $className;
                 $this->propertyTypes = [];
 
-                if ($node instanceof Class_ && $node->extends !== null) {
-                    $parentClass = $this->resolveClassName($node->extends->toString());
-                    $this->classHierarchy[$this->currentClass] = $parentClass;
+                if ($node instanceof Class_) {
+                    if ($node->extends !== null) {
+                        $parentClass = $this->resolveClassName($node->extends->toString());
+                        $this->classHierarchy[$this->currentClass] = $parentClass;
+                    }
+
+                    $this->classTraits[$this->currentClass] = $this->extractTraitsFromClass($node);
                 }
             }
         }
@@ -545,13 +558,7 @@ final class ThrowsVisitor extends NodeVisitorAbstract
         string $methodName,
         string $displayMethodSignature,
     ): void {
-        $methodSignature = "{$calledClass}::{$methodName}";
-
-        $calledMethodThrows = $this->methodThrows[$methodSignature] ?? null;
-
-        if ($calledMethodThrows === null) {
-            $calledMethodThrows = $this->globalMethodThrows[$methodSignature] ?? null;
-        }
+        $calledMethodThrows = $this->findMethodThrows($calledClass, $methodName);
 
         if (in_array($calledMethodThrows, [null, []], true)) {
             return;
@@ -865,5 +872,65 @@ final class ThrowsVisitor extends NodeVisitorAbstract
         }
 
         return false;
+    }
+
+    /**
+     * Extract trait names used by a class
+     *
+     * @param Class_ $classNode Class node
+     *
+     * @return string[] List of fully qualified trait names
+     */
+    private function extractTraitsFromClass(Class_ $classNode): array
+    {
+        $traits = [];
+
+        foreach ($classNode->stmts as $stmt) {
+            if (!$stmt instanceof TraitUse) {
+                continue;
+            }
+
+            foreach ($stmt->traits as $trait) {
+                $traitName = $trait->toString();
+                $fullyQualifiedTrait = $this->resolveClassName($traitName);
+                $traits[] = $fullyQualifiedTrait;
+            }
+        }
+
+        return $traits;
+    }
+
+    /**
+     * Find method throws by checking class and its traits
+     *
+     * @param string $calledClass Called class name
+     * @param string $methodName  Called method name
+     *
+     * @return string[]|null Array of thrown exceptions or null if not found
+     */
+    private function findMethodThrows(string $calledClass, string $methodName): ?array
+    {
+        $methodSignature = "{$calledClass}::{$methodName}";
+
+        $methodThrows = $this->methodThrows[$methodSignature] ?? null;
+
+        if ($methodThrows === null) {
+            $methodThrows = $this->globalMethodThrows[$methodSignature] ?? null;
+        }
+
+        if ($methodThrows === null && isset($this->classTraits[$calledClass])) {
+            foreach ($this->classTraits[$calledClass] as $traitName) {
+                $traitMethodSignature = "{$traitName}::{$methodName}";
+                $methodThrows = $this->methodThrows[$traitMethodSignature]
+                    ?? $this->globalMethodThrows[$traitMethodSignature]
+                    ?? null;
+
+                if ($methodThrows !== null) {
+                    break;
+                }
+            }
+        }
+
+        return $methodThrows;
     }
 }
