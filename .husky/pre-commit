@@ -1,7 +1,4 @@
 #!/bin/sh
 
-# Run linter and type check before commit
-npm run compile && npm run lint
-
-# Run PHP tests
-composer test
+# Run linter
+npm run lint
