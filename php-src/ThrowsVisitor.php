@@ -22,6 +22,7 @@ use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\Node\Stmt\Trait_;
+use PhpParser\Node\Stmt\TryCatch;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\NodeVisitorAbstract;
 
@@ -102,6 +103,14 @@ final class ThrowsVisitor extends NodeVisitorAbstract
      * @var array<string, string>
      */
     private array $useImports = [];
+
+    /**
+     * Stack of caught exception types in current try-catch blocks
+     * Each element is an array of exception type names that are caught at that nesting level
+     *
+     * @var array<int, string[]>
+     */
+    private array $tryCatchStack = [];
 
     /**
      * Constructor
@@ -223,6 +232,10 @@ final class ThrowsVisitor extends NodeVisitorAbstract
         if ($node instanceof StaticCall) {
             $this->analyzeStaticCall($node);
         }
+
+        if ($node instanceof TryCatch) {
+            $this->enterTryCatch($node);
+        }
     }
 
     /**
@@ -236,6 +249,10 @@ final class ThrowsVisitor extends NodeVisitorAbstract
     {
         if ($node instanceof Class_ || $node instanceof Trait_) {
             $this->currentClass = null;
+        }
+
+        if ($node instanceof TryCatch) {
+            $this->leaveTryCatch();
         }
 
         if (!$node instanceof Function_ && !$node instanceof ClassMethod) {
@@ -312,6 +329,10 @@ final class ThrowsVisitor extends NodeVisitorAbstract
         $exceptionType = $this->getExceptionType($node->expr);
 
         if ($exceptionType === null) {
+            return;
+        }
+
+        if ($this->isExceptionCaught($exceptionType)) {
             return;
         }
 
@@ -451,6 +472,10 @@ final class ThrowsVisitor extends NodeVisitorAbstract
         }
 
         foreach ($calledMethodThrows as $thrownException) {
+            if ($this->isExceptionCaught($thrownException)) {
+                continue;
+            }
+
             $isDocumented = false;
 
             foreach ($this->declaredThrows as $declared) {
@@ -526,6 +551,92 @@ final class ThrowsVisitor extends NodeVisitorAbstract
         }
 
         return null;
+    }
+
+    /**
+     * Enter try-catch block - push caught exception types onto stack
+     *
+     * @param TryCatch $node TryCatch node
+     *
+     * @return void
+     */
+    private function enterTryCatch(TryCatch $node): void
+    {
+        $caughtTypes = [];
+
+        foreach ($node->catches as $catch) {
+            foreach ($catch->types as $type) {
+                if ($type instanceof Name) {
+                    $typeName = $type->toString();
+
+                    if ($type->isFullyQualified()) {
+                        $caughtTypes[] = '\\' . ltrim($typeName, '\\');
+                    } elseif (isset($this->useImports[$typeName])) {
+                        $caughtTypes[] = $this->useImports[$typeName];
+                    } else {
+                        $fullTypeName = $this->currentNamespace !== null
+                            ? "{$this->currentNamespace}\\{$typeName}"
+                            : $typeName;
+                        $caughtTypes[] = $fullTypeName;
+                    }
+                }
+            }
+        }
+
+        $this->tryCatchStack[] = $caughtTypes;
+    }
+
+    /**
+     * Leave try-catch block - pop from stack
+     *
+     * @return void
+     */
+    private function leaveTryCatch(): void
+    {
+        array_pop($this->tryCatchStack);
+    }
+
+    /**
+     * Check if exception is caught in current try-catch context
+     *
+     * @param string $exceptionType Exception type to check
+     *
+     * @return bool True if caught, false otherwise
+     */
+    private function isExceptionCaught(string $exceptionType): bool
+    {
+        if ($this->tryCatchStack === []) {
+            return false;
+        }
+
+        $caughtTypes = end($this->tryCatchStack);
+
+        foreach ($caughtTypes as $caughtType) {
+            if ($this->isExceptionMatchingOrSubtype($exceptionType, $caughtType)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if thrown exception matches or is subtype of caught exception
+     *
+     * @param string $thrown Thrown exception type
+     * @param string $caught Caught exception type
+     *
+     * @return bool True if matches or is subtype, false otherwise
+     */
+    private function isExceptionMatchingOrSubtype(string $thrown, string $caught): bool
+    {
+        if ($this->isExceptionMatching($thrown, $caught)) {
+            return true;
+        }
+
+        $caughtNormalized = '\\' . ltrim($caught, '\\');
+
+        return $caughtNormalized === '\\Exception';
     }
 
     /**
