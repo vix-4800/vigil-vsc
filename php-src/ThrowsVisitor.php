@@ -22,12 +22,13 @@ use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\Node\Stmt\Trait_;
+use PhpParser\Node\Stmt\Use_;
 use PhpParser\NodeVisitorAbstract;
 
 /**
  * Visitor to analyze @throws declarations and thrown exceptions
  */
-class ThrowsVisitor extends NodeVisitorAbstract
+final class ThrowsVisitor extends NodeVisitorAbstract
 {
     /**
      * Error records
@@ -110,10 +111,8 @@ class ThrowsVisitor extends NodeVisitorAbstract
      *
      * @return void
      */
-    public function __construct(
-        private readonly string $filePath,
-        private array $globalMethodThrows = [],
-    ) {
+    public function __construct(private readonly string $filePath, private array $globalMethodThrows = [])
+    {
         $this->docBlockFactory = DocBlockFactory::createInstance();
     }
 
@@ -146,29 +145,30 @@ class ThrowsVisitor extends NodeVisitorAbstract
      */
     public function enterNode(Node $node): void
     {
-        // Track namespace and collect use imports
         if ($node instanceof Namespace_ && $node->name !== null) {
             $this->currentNamespace = $node->name->toString();
             $this->useImports = [];
+
             foreach ($node->stmts as $stmt) {
-                if ($stmt instanceof \PhpParser\Node\Stmt\Use_) {
-                    foreach ($stmt->uses as $use) {
-                        $alias = $use->alias?->toString() ?? $use->name->getLast();
-                        $this->useImports[$alias] = $use->name->toString();
-                    }
+                if (!$stmt instanceof Use_) {
+                    continue;
+                }
+
+                foreach ($stmt->uses as $use) {
+                    $alias = $use->alias?->toString() ?? $use->name->getLast();
+                    $this->useImports[$alias] = $use->name->toString();
                 }
             }
         }
 
-        // Track current class or trait
         if ($node instanceof Class_ || $node instanceof Trait_) {
             $className = $node->name?->toString();
 
             if ($className !== null) {
                 $this->currentClass = $this->currentNamespace !== null
-                    ? $this->currentNamespace . '\\' . $className
+                    ? "{$this->currentNamespace}\\{$className}"
                     : $className;
-                $this->propertyTypes = []; // Reset property types for new class/trait
+                $this->propertyTypes = [];
             }
         }
 
@@ -183,29 +183,31 @@ class ThrowsVisitor extends NodeVisitorAbstract
                 $this->parseDocBlock($docComment);
             }
 
-            // Save method throws for later reference with fully qualified class name
-            // This must be AFTER parseDocBlock so that declaredThrows is populated
             if ($this->currentClass !== null && $node instanceof ClassMethod) {
-                $methodSignature = $this->currentClass . '::' . $this->currentFunction;
+                $methodSignature = "{$this->currentClass}::{$this->currentFunction}";
                 $this->methodThrows[$methodSignature] = $this->declaredThrows;
             }
 
-            // Extract promoted properties from constructor
             if ($node instanceof ClassMethod && $node->name->toString() === '__construct') {
                 foreach ($node->getParams() as $param) {
-                    if ($param->flags !== 0 && $param->type instanceof Name) {
-                        $propertyName = $param->var->name;
-                        $typeName = $param->type->toString();
-
-                        // Resolve type name
-                        $fullTypeName = $param->type->isFullyQualified()
-                            ? $typeName
-                            : ($this->currentNamespace !== null
-                                ? $this->currentNamespace . '\\' . $typeName
-                                : $typeName);
-
-                        $this->propertyTypes[$propertyName] = $fullTypeName;
+                    if ($param->flags === 0) {
+                        continue;
                     }
+
+                    if (!$param->type instanceof Name) {
+                        continue;
+                    }
+
+                    $propertyName = $param->var->name;
+                    $typeName = $param->type->toString();
+
+                    $qualifiedNamespace = $this->currentNamespace !== null ? "{$this->currentNamespace}\\{$typeName}" : $typeName;
+
+                    $fullTypeName = $param->type->isFullyQualified()
+                        ? $typeName
+                        : $qualifiedNamespace;
+
+                    $this->propertyTypes[$propertyName] = $fullTypeName;
                 }
             }
         }
@@ -240,7 +242,6 @@ class ThrowsVisitor extends NodeVisitorAbstract
             return;
         }
 
-        // Check for documented but not thrown exceptions
         foreach ($this->declaredThrows as $declared) {
             $isActuallyThrown = false;
 
@@ -252,15 +253,17 @@ class ThrowsVisitor extends NodeVisitorAbstract
                 }
             }
 
-            if (!$isActuallyThrown) {
-                $this->errors[] = [
-                    'line' => $node->getStartLine(),
-                    'type' => 'unnecessary_throws',
-                    'exception' => $declared,
-                    'function' => $this->currentFunction,
-                    'message' => "Exception '{$declared}' is documented in @throws but never thrown",
-                ];
+            if ($isActuallyThrown) {
+                continue;
             }
+
+            $this->errors[] = [
+                'line' => $node->getStartLine(),
+                'type' => 'unnecessary_throws',
+                'exception' => $declared,
+                'function' => $this->currentFunction,
+                'message' => "Exception '{$declared}' is documented in @throws but never thrown",
+            ];
         }
 
         $this->currentFunction = null;
@@ -312,7 +315,6 @@ class ThrowsVisitor extends NodeVisitorAbstract
             return;
         }
 
-        // Track that this exception is actually thrown
         $this->actuallyThrown[] = $exceptionType;
 
         $isDocumented = false;
@@ -347,21 +349,17 @@ class ThrowsVisitor extends NodeVisitorAbstract
      */
     private function analyzeMethodCall(MethodCall $node): void
     {
-        // Get method name
         if (!$node->name instanceof Identifier) {
             return;
         }
 
         $methodName = $node->name->toString();
 
-        // Determine the class of the called method
         $calledClass = null;
 
         if ($node->var instanceof Variable && $node->var->name === 'this') {
-            // $this->method() - use current class
             $calledClass = $this->currentClass;
         } elseif ($node->var instanceof PropertyFetch) {
-            // $this->property->method() - try to resolve property type
             $calledClass = $this->resolvePropertyType($node->var);
         }
 
@@ -369,13 +367,10 @@ class ThrowsVisitor extends NodeVisitorAbstract
             return;
         }
 
-        // Build method signature
-        $methodSignature = $calledClass . '::' . $methodName;
+        $methodSignature = "{$calledClass}::{$methodName}";
 
-        // Check local method throws first
         $calledMethodThrows = $this->methodThrows[$methodSignature] ?? null;
 
-        // If not found locally, check global map
         if ($calledMethodThrows === null) {
             $calledMethodThrows = $this->globalMethodThrows[$methodSignature] ?? null;
         }
@@ -384,7 +379,6 @@ class ThrowsVisitor extends NodeVisitorAbstract
             return;
         }
 
-        // Check if each exception from called method is declared in current method
         foreach ($calledMethodThrows as $thrownException) {
             $isDocumented = false;
 
@@ -396,9 +390,6 @@ class ThrowsVisitor extends NodeVisitorAbstract
                 }
             }
 
-            // Track that these exceptions can be thrown from this method
-            // We add them to actuallyThrown regardless of whether they're documented
-            // so that the leaveNode check knows these exceptions are actually thrown
             $this->actuallyThrown[] = $thrownException;
 
             if ($isDocumented) {
@@ -427,38 +418,29 @@ class ThrowsVisitor extends NodeVisitorAbstract
      */
     private function analyzeStaticCall(StaticCall $node): void
     {
-        // Get method name
         if (!$node->name instanceof Identifier) {
             return;
         }
 
         $methodName = $node->name->toString();
 
-        // Determine the class of the called static method
         $calledClass = null;
 
         if ($node->class instanceof Name) {
             $className = $node->class->toString();
 
-            // Handle self, static, parent keywords
             if (in_array($className, ['self', 'static'], true)) {
                 $calledClass = $this->currentClass;
             } elseif ($className === 'parent') {
-                // We can't easily resolve parent class without reflection
-                // Skip parent calls for now
                 return;
+            } elseif ($node->class->isFullyQualified()) {
+                $calledClass = $className;
+            } elseif (isset($this->useImports[$className])) {
+                $calledClass = $this->useImports[$className];
             } else {
-                // Resolve class name
-                if ($node->class->isFullyQualified()) {
-                    $calledClass = $className;
-                } elseif (isset($this->useImports[$className])) {
-                    $calledClass = $this->useImports[$className];
-                } else {
-                    // Try to resolve with current namespace
-                    $calledClass = $this->currentNamespace !== null
-                        ? $this->currentNamespace . '\\' . $className
-                        : $className;
-                }
+                $calledClass = $this->currentNamespace !== null
+                    ? "{$this->currentNamespace}\\{$className}"
+                    : $className;
             }
         }
 
@@ -466,13 +448,10 @@ class ThrowsVisitor extends NodeVisitorAbstract
             return;
         }
 
-        // Build method signature
-        $methodSignature = $calledClass . '::' . $methodName;
+        $methodSignature = "{$calledClass}::{$methodName}";
 
-        // Check local method throws first
         $calledMethodThrows = $this->methodThrows[$methodSignature] ?? null;
 
-        // If not found locally, check global map
         if ($calledMethodThrows === null) {
             $calledMethodThrows = $this->globalMethodThrows[$methodSignature] ?? null;
         }
@@ -481,7 +460,6 @@ class ThrowsVisitor extends NodeVisitorAbstract
             return;
         }
 
-        // Check if each exception from called method is declared in current method
         foreach ($calledMethodThrows as $thrownException) {
             $isDocumented = false;
 
@@ -493,7 +471,6 @@ class ThrowsVisitor extends NodeVisitorAbstract
                 }
             }
 
-            // Track that these exceptions can be thrown from this method
             $this->actuallyThrown[] = $thrownException;
 
             if ($isDocumented) {
@@ -522,7 +499,6 @@ class ThrowsVisitor extends NodeVisitorAbstract
      */
     private function resolvePropertyType(PropertyFetch $node): ?string
     {
-        // For now, we can only resolve $this->property
         if (!$node->var instanceof Variable || $node->var->name !== 'this') {
             return null;
         }
@@ -533,7 +509,6 @@ class ThrowsVisitor extends NodeVisitorAbstract
 
         $propertyName = $node->name->toString();
 
-        // Look up the property type from our collected types
         return $this->propertyTypes[$propertyName] ?? null;
     }
 
@@ -549,7 +524,6 @@ class ThrowsVisitor extends NodeVisitorAbstract
         if ($expr instanceof New_ && $expr->class instanceof Name) {
             $name = $expr->class->toString();
 
-            // Normalize: always return with leading backslash for fully qualified names
             if ($expr->class->isFullyQualified()) {
                 return '\\' . ltrim($name, '\\');
             }

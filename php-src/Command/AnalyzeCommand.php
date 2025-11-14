@@ -15,21 +15,21 @@ use Vix\ExceptionInspector\Analyzer;
 /**
  * Command to analyze PHP files for @throws documentation
  */
-class AnalyzeCommand extends Command
+final class AnalyzeCommand extends Command
 {
     /**
      * Default command name
      *
      * @var string
      */
-    protected static string $defaultName = 'analyze';
+    private static string $defaultName = 'analyze';
 
     /**
      * Default command description
      *
      * @var string
      */
-    protected static string $defaultDescription = 'Analyze @throws tags in PHP code';
+    private static string $defaultDescription = 'Analyze @throws tags in PHP code';
 
     /**
      * Configure the command
@@ -40,12 +40,10 @@ class AnalyzeCommand extends Command
             ->setName('analyze')
             ->setDescription('Analyze @throws tags in PHP code')
             ->setHelp(
-                'This command analyzes PHP files for throw statements and checks if they are ' .
-                'properly documented in @throws tags. ' . "\n\n" .
-                'By default, when analyzing a single file, the tool will automatically detect ' .
-                'the project root (by looking for composer.json) and scan the entire project ' .
-                'to build a complete context of all methods and their @throws declarations. ' .
-                'This enables accurate cross-file analysis.'
+                "This command analyzes PHP files for throw statements and checks if they are properly
+                documented in @throws tags. \n\n By default, when analyzing a single file, the tool will automatically
+                detect the project root (by looking for composer.json) and scan the entire project to build a complete
+                context of all methods and their @throws declarations. This enables accurate cross-file analysis."
             )
             ->addArgument(
                 'path',

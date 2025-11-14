@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Vix\ExceptionInspector;
 
+use Exception;
 use InvalidArgumentException;
+use JsonException;
 use PhpParser\Error;
 use PhpParser\NodeTraverser;
 use PhpParser\ParserFactory;
@@ -17,7 +19,7 @@ use RegexIterator;
  *
  * Analyzes PHP files for throw statements and documents exceptions thrown.
  */
-class Analyzer
+final class Analyzer
 {
     /**
      * Analysis results
@@ -49,13 +51,6 @@ class Analyzer
     private ?string $projectRoot = null;
 
     /**
-     * Whether to use project-wide analysis
-     *
-     * @var bool
-     */
-    private bool $useProjectWideAnalysis = true;
-
-    /**
      * Analyze a file or directory with optional project-wide context
      *
      * @param string $path                   File or directory path
@@ -75,13 +70,10 @@ class Analyzer
         ];
         $this->globalMethodThrows = [];
         $this->filesToAnalyze = [];
-        $this->useProjectWideAnalysis = $useProjectWideAnalysis;
 
-        // Collect all files
         if (is_file($path)) {
             $this->filesToAnalyze[] = $path;
 
-            // Auto-detect project root and scan for context
             if ($useProjectWideAnalysis) {
                 $this->projectRoot = $this->findProjectRoot($path);
 
@@ -95,13 +87,10 @@ class Analyzer
             throw new InvalidArgumentException("Path does not exist: {$path}");
         }
 
-        // Pass 1: Collect all method signatures and their @throws
         foreach ($this->filesToAnalyze as $file) {
             $this->collectMethodThrows($file);
         }
 
-        // Pass 2: Analyze each file with full context
-        // Only analyze the originally requested path
         if (is_file($path)) {
             $this->analyzeFile($path);
         } else {
@@ -123,18 +112,17 @@ class Analyzer
     private function findProjectRoot(string $startPath): ?string
     {
         $dir = is_file($startPath) ? dirname($startPath) : $startPath;
-        $maxDepth = 10; // Prevent infinite loop
+        $maxDepth = 10;
         $depth = 0;
 
         while ($depth < $maxDepth) {
-            if (file_exists($dir . '/composer.json')) {
+            if (file_exists("{$dir}/composer.json")) {
                 return $dir;
             }
 
             $parentDir = dirname($dir);
 
             if ($parentDir === $dir) {
-                // Reached filesystem root
                 break;
             }
 
@@ -157,14 +145,14 @@ class Analyzer
         $dirsToScan = $this->detectSourceDirectories($projectRoot);
 
         if ($dirsToScan !== []) {
-            // Scan detected directories
             foreach ($dirsToScan as $dir) {
-                if (is_dir($dir)) {
-                    $this->collectFiles($dir);
+                if (!is_dir($dir)) {
+                    continue;
                 }
+
+                $this->collectFiles($dir);
             }
         } else {
-            // Fallback: scan whole project excluding vendor/cache
             $this->collectFilesExcludingVendor($projectRoot);
         }
     }
@@ -175,16 +163,18 @@ class Analyzer
      * @param string $projectRoot Project root directory
      *
      * @return string[] List of absolute paths to source directories
+     *
+     * @throws JsonException
      */
     private function detectSourceDirectories(string $projectRoot): array
     {
-        $composerFile = $projectRoot . '/composer.json';
+        $composerFile = "{$projectRoot}/composer.json";
 
         if (!file_exists($composerFile)) {
             return [];
         }
 
-        $composerData = json_decode(file_get_contents($composerFile), true);
+        $composerData = json_decode(file_get_contents($composerFile), true, 512, JSON_THROW_ON_ERROR);
 
         if (!is_array($composerData)) {
             return [];
@@ -192,72 +182,74 @@ class Analyzer
 
         $directories = [];
 
-        // PSR-4 autoload
         if (isset($composerData['autoload']['psr-4']) && is_array($composerData['autoload']['psr-4'])) {
-            foreach ($composerData['autoload']['psr-4'] as $namespace => $paths) {
+            foreach ($composerData['autoload']['psr-4'] as $paths) {
                 $pathList = is_array($paths) ? $paths : [$paths];
 
                 foreach ($pathList as $path) {
-                    $fullPath = $projectRoot . '/' . rtrim($path, '/');
+                    $fullPath = $projectRoot . '/' . rtrim((string) $path, '/');
 
-                    if (is_dir($fullPath)) {
-                        $directories[] = $fullPath;
+                    if (!is_dir($fullPath)) {
+                        continue;
                     }
-                }
-            }
-        }
 
-        // PSR-0 autoload
-        if (isset($composerData['autoload']['psr-0']) && is_array($composerData['autoload']['psr-0'])) {
-            foreach ($composerData['autoload']['psr-0'] as $namespace => $paths) {
-                $pathList = is_array($paths) ? $paths : [$paths];
-
-                foreach ($pathList as $path) {
-                    $fullPath = $projectRoot . '/' . rtrim($path, '/');
-
-                    if (is_dir($fullPath)) {
-                        $directories[] = $fullPath;
-                    }
-                }
-            }
-        }
-
-        // Classmap
-        if (isset($composerData['autoload']['classmap']) && is_array($composerData['autoload']['classmap'])) {
-            foreach ($composerData['autoload']['classmap'] as $path) {
-                $fullPath = $projectRoot . '/' . rtrim($path, '/');
-
-                if (is_dir($fullPath)) {
                     $directories[] = $fullPath;
                 }
             }
         }
 
-        // Files (usually single files, but may contain directories)
+        if (isset($composerData['autoload']['psr-0']) && is_array($composerData['autoload']['psr-0'])) {
+            foreach ($composerData['autoload']['psr-0'] as $paths) {
+                $pathList = is_array($paths) ? $paths : [$paths];
+
+                foreach ($pathList as $path) {
+                    $fullPath = $projectRoot . '/' . rtrim((string) $path, '/');
+
+                    if (!is_dir($fullPath)) {
+                        continue;
+                    }
+
+                    $directories[] = $fullPath;
+                }
+            }
+        }
+
+        if (isset($composerData['autoload']['classmap']) && is_array($composerData['autoload']['classmap'])) {
+            foreach ($composerData['autoload']['classmap'] as $path) {
+                $fullPath = $projectRoot . '/' . rtrim((string) $path, '/');
+
+                if (!is_dir($fullPath)) {
+                    continue;
+                }
+
+                $directories[] = $fullPath;
+            }
+        }
+
         if (isset($composerData['autoload']['files']) && is_array($composerData['autoload']['files'])) {
             foreach ($composerData['autoload']['files'] as $path) {
-                $fullPath = $projectRoot . '/' . rtrim($path, '/');
+                $fullPath = $projectRoot . '/' . rtrim((string) $path, '/');
 
                 if (is_dir($fullPath)) {
                     $directories[] = $fullPath;
                 } elseif (is_file($fullPath)) {
-                    // Add individual file
                     $this->filesToAnalyze[] = $fullPath;
                 }
             }
         }
 
-        // Also check autoload-dev for development classes
         if (isset($composerData['autoload-dev']['psr-4']) && is_array($composerData['autoload-dev']['psr-4'])) {
-            foreach ($composerData['autoload-dev']['psr-4'] as $namespace => $paths) {
+            foreach ($composerData['autoload-dev']['psr-4'] as $paths) {
                 $pathList = is_array($paths) ? $paths : [$paths];
 
                 foreach ($pathList as $path) {
-                    $fullPath = $projectRoot . '/' . rtrim($path, '/');
+                    $fullPath = $projectRoot . '/' . rtrim((string) $path, '/');
 
-                    if (is_dir($fullPath)) {
-                        $directories[] = $fullPath;
+                    if (!is_dir($fullPath)) {
+                        continue;
                     }
+
+                    $directories[] = $fullPath;
                 }
             }
         }
@@ -285,28 +277,33 @@ class Analyzer
             );
 
             foreach ($iterator as $file) {
-                if (!$file->isFile() || $file->getExtension() !== 'php') {
+                if (!$file->isFile()) {
+                    continue;
+                }
+
+                if ($file->getExtension() !== 'php') {
                     continue;
                 }
 
                 $path = $file->getPathname();
 
-                // Skip if in excluded directory
                 $skip = false;
 
                 foreach ($excludeDirs as $excludeDir) {
-                    if (str_contains($path, '/' . $excludeDir . '/')) {
+                    if (str_contains((string) $path, "/{$excludeDir}/")) {
                         $skip = true;
 
                         break;
                     }
                 }
 
-                if (!$skip) {
-                    $this->filesToAnalyze[] = $path;
+                if ($skip) {
+                    continue;
                 }
+
+                $this->filesToAnalyze[] = $path;
             }
-        } catch (\Exception) {
+        } catch (Exception) {
             // Ignore errors during file collection
         }
     }
@@ -355,7 +352,6 @@ class Analyzer
             $traverser->addVisitor($visitor);
             $traverser->traverse($ast);
 
-            // Merge collected method throws into global map
             $this->globalMethodThrows = array_merge(
                 $this->globalMethodThrows,
                 $visitor->getMethodThrows()
