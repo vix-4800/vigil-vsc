@@ -113,6 +113,14 @@ final class ThrowsVisitor extends NodeVisitorAbstract
     private array $tryCatchStack = [];
 
     /**
+     * Map of class names to their parent class names
+     * Format: ['ClassName' => 'ParentClass']
+     *
+     * @var array<string, string>
+     */
+    private array $classHierarchy = [];
+
+    /**
      * Constructor
      *
      * @param string                  $filePath           File path being analyzed
@@ -178,6 +186,12 @@ final class ThrowsVisitor extends NodeVisitorAbstract
                     ? "{$this->currentNamespace}\\{$className}"
                     : $className;
                 $this->propertyTypes = [];
+
+                // Store parent class information for hierarchy analysis
+                if ($node instanceof Class_ && $node->extends !== null) {
+                    $parentClass = $this->resolveClassName($node->extends->toString());
+                    $this->classHierarchy[$this->currentClass] = $parentClass;
+                }
             }
         }
 
@@ -528,6 +542,30 @@ final class ThrowsVisitor extends NodeVisitorAbstract
     }
 
     /**
+     * Resolve class name to fully qualified name
+     *
+     * @param string $className Class name to resolve
+     *
+     * @return string Fully qualified class name
+     */
+    private function resolveClassName(string $className): string
+    {
+        if (str_starts_with($className, '\\')) {
+            return $className;
+        }
+
+        if (isset($this->useImports[$className])) {
+            return $this->useImports[$className];
+        }
+
+        if ($this->currentNamespace !== null) {
+            return "{$this->currentNamespace}\\{$className}";
+        }
+
+        return $className;
+    }
+
+    /**
      * Get exception type from throw expression
      *
      * @param Expr $expr Throw expression
@@ -645,7 +683,7 @@ final class ThrowsVisitor extends NodeVisitorAbstract
      * @param string $thrown   Thrown exception type
      * @param string $declared Declared exception type
      *
-     * @return bool True if matches, false otherwise
+     * @return bool `True` if matches, `false` otherwise
      */
     private function isExceptionMatching(string $thrown, string $declared): bool
     {
@@ -660,9 +698,99 @@ final class ThrowsVisitor extends NodeVisitorAbstract
             return true;
         }
 
-        $thrownNormalized = '\\' . ltrim($thrown, '\\');
-        $declaredNormalized = '\\' . ltrim($declared, '\\');
+        $thrownResolved = $this->resolveExceptionName($thrown);
+        $declaredResolved = $this->resolveExceptionName($declared);
 
-        return $thrownNormalized === $declaredNormalized;
+        if ($thrownResolved === $declaredResolved) {
+            return true;
+        }
+
+        $thrownNormalized = '\\' . ltrim($thrownResolved, '\\');
+        $declaredNormalized = '\\' . ltrim($declaredResolved, '\\');
+
+        if ($thrownNormalized === $declaredNormalized) {
+            return true;
+        }
+
+        return $this->isParentException($thrownNormalized, $declaredNormalized);
+    }
+
+    /**
+     * Resolve exception name to fully qualified name if possible
+     *
+     * @param string $exceptionName Exception name (short or fully qualified)
+     *
+     * @return string Fully qualified exception name
+     */
+    private function resolveExceptionName(string $exceptionName): string
+    {
+        if (str_contains($exceptionName, '\\')) {
+            return $exceptionName;
+        }
+
+        if (isset($this->useImports[$exceptionName])) {
+            return $this->useImports[$exceptionName];
+        }
+
+        if ($this->currentNamespace !== null) {
+            return "{$this->currentNamespace}\\{$exceptionName}";
+        }
+
+        return $exceptionName;
+    }
+
+    /**
+     * Check if declared exception is a parent of thrown exception
+     * This uses both collected class hierarchy and is_subclass_of with autoloading
+     *
+     * @param string $thrown   Thrown exception type (normalized with leading backslash)
+     * @param string $declared Declared exception type (normalized with leading backslash)
+     *
+     * @return bool `True` if declared is parent of thrown, `false` otherwise
+     */
+    private function isParentException(string $thrown, string $declared): bool
+    {
+        $thrownClass = ltrim($thrown, '\\');
+        $declaredClass = ltrim($declared, '\\');
+
+        if ($this->isParentInCollectedHierarchy($thrownClass, $declaredClass)) {
+            return true;
+        }
+
+        try {
+            return is_subclass_of($thrownClass, $declaredClass, true);
+        } catch (Exception) {
+            return false;
+        }
+    }
+
+    /**
+     * Check if declared is a parent of thrown using collected class hierarchy
+     *
+     * @param string $thrown   Thrown exception class name
+     * @param string $declared Declared exception class name
+     *
+     * @return bool True if declared is parent of thrown
+     */
+    private function isParentInCollectedHierarchy(string $thrown, string $declared): bool
+    {
+        $current = $thrown;
+        $visited = [];
+
+        while (isset($this->classHierarchy[$current]) && !isset($visited[$current])) {
+            $visited[$current] = true;
+            $parent = $this->classHierarchy[$current];
+
+            $parentNormalized = ltrim($parent, '\\');
+            $declaredNormalized = ltrim($declared, '\\');
+
+            if ($parentNormalized === $declaredNormalized) {
+                return true;
+            }
+
+            $current = $parent;
+        }
+
+        return false;
     }
 }
