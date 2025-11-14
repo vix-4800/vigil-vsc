@@ -22,6 +22,16 @@ interface InspectorResult {
     files_with_errors: number;
     total_errors: number;
   };
+  performance?: {
+    cache_hits: number;
+    cache_misses: number;
+    files_scanned: number;
+    analysis_time_ms: number;
+    cache_stats?: {
+      total_files: number;
+      cache_size_bytes: number;
+    };
+  };
   error?: {
     message: string;
     file?: string;
@@ -175,6 +185,28 @@ export class InspectorAnalyzer {
       this.appendLog(`PHP Exception Inspector error: ${result.error.message}`);
       vscode.window.showErrorMessage(`PHP Exception Inspector error: ${result.error.message}`);
       return;
+    }
+
+    if (result.performance) {
+      const perf = result.performance;
+      const cacheHitRate =
+        perf.cache_hits + perf.cache_misses > 0
+          ? ((perf.cache_hits / (perf.cache_hits + perf.cache_misses)) * 100).toFixed(1)
+          : '0';
+
+      this.appendLog('--- Performance Statistics ---');
+      this.appendLog(`Analysis time: ${perf.analysis_time_ms.toFixed(2)}ms`);
+      this.appendLog(`Files scanned: ${perf.files_scanned}`);
+      this.appendLog(`Cache hits: ${perf.cache_hits}`);
+      this.appendLog(`Cache misses: ${perf.cache_misses}`);
+      this.appendLog(`Cache hit rate: ${cacheHitRate}%`);
+
+      if (perf.cache_stats) {
+        this.appendLog(`Cached files: ${perf.cache_stats.total_files}`);
+        this.appendLog(`Cache size: ${(perf.cache_stats.cache_size_bytes / 1024).toFixed(2)} KB`);
+      }
+
+      this.appendLog('----------------------------');
     }
 
     if (!result.files || result.files.length === 0) {

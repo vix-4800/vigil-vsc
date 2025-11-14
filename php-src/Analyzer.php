@@ -52,6 +52,25 @@ final class Analyzer
     private ?string $projectRoot = null;
 
     /**
+     * Cache manager for storing analysis results
+     *
+     * @var CacheManager|null
+     */
+    private ?CacheManager $cacheManager = null;
+
+    /**
+     * Performance statistics
+     *
+     * @var array{cache_hits: int, cache_misses: int, files_scanned: int, analysis_time_ms: float}
+     */
+    private array $perfStats = [
+        'cache_hits' => 0,
+        'cache_misses' => 0,
+        'files_scanned' => 0,
+        'analysis_time_ms' => 0,
+    ];
+
+    /**
      * Analyze a file or directory with optional project-wide context
      *
      * @param string $path                   File or directory path
@@ -64,6 +83,8 @@ final class Analyzer
      */
     public function analyze(string $path, bool $useProjectWideAnalysis = true): array
     {
+        $startTime = microtime(true);
+
         $this->results = [
             'files' => [],
             'summary' => [
@@ -71,9 +92,16 @@ final class Analyzer
                 'files_with_errors' => 0,
                 'total_errors' => 0,
             ],
+            'performance' => [],
         ];
         $this->globalMethodThrows = [];
         $this->filesToAnalyze = [];
+        $this->perfStats = [
+            'cache_hits' => 0,
+            'cache_misses' => 0,
+            'files_scanned' => 0,
+            'analysis_time_ms' => 0,
+        ];
 
         if (is_file($path)) {
             $this->filesToAnalyze[] = $path;
@@ -82,10 +110,15 @@ final class Analyzer
                 $this->projectRoot = $this->findProjectRoot($path);
 
                 if ($this->projectRoot !== null) {
+                    $this->cacheManager = new CacheManager($this->projectRoot);
+                    $this->cacheManager->load();
                     $this->collectProjectFiles($this->projectRoot);
                 }
             }
         } elseif (is_dir($path)) {
+            $this->projectRoot = $path;
+            $this->cacheManager = new CacheManager($this->projectRoot);
+            $this->cacheManager->load();
             $this->collectFiles($path);
         } else {
             throw new InvalidArgumentException("Path does not exist: {$path}");
@@ -95,12 +128,27 @@ final class Analyzer
             $this->collectMethodThrows($file);
         }
 
+        if ($this->cacheManager !== null) {
+            $this->cacheManager->setGlobalMethodThrows($this->globalMethodThrows);
+            $this->cacheManager->save();
+        }
+
         if (is_file($path)) {
             $this->analyzeFile($path);
         } else {
             foreach ($this->filesToAnalyze as $file) {
                 $this->analyzeFile($file);
             }
+        }
+
+        $endTime = microtime(true);
+        $this->perfStats['analysis_time_ms'] = ($endTime - $startTime) * 1000;
+
+        $this->results['performance'] = $this->perfStats;
+
+        if ($this->cacheManager !== null) {
+            $cacheStats = $this->cacheManager->getStats();
+            $this->results['performance']['cache_stats'] = $cacheStats;
         }
 
         return $this->results;
@@ -349,6 +397,24 @@ final class Analyzer
      */
     private function collectMethodThrows(string $filePath): void
     {
+        $this->perfStats['files_scanned']++;
+
+        if ($this->cacheManager !== null) {
+            $cached = $this->cacheManager->getMethodThrows($filePath);
+
+            if ($cached['found']) {
+                $this->perfStats['cache_hits']++;
+                $this->globalMethodThrows = array_merge(
+                    $this->globalMethodThrows,
+                    $cached['methodThrows']
+                );
+
+                return;
+            }
+
+            $this->perfStats['cache_misses']++;
+        }
+
         $parser = (new ParserFactory())->createForHostVersion();
 
         try {
@@ -364,10 +430,16 @@ final class Analyzer
             $traverser->addVisitor($visitor);
             $traverser->traverse($ast);
 
+            $methodThrows = $visitor->getMethodThrows();
+
             $this->globalMethodThrows = array_merge(
                 $this->globalMethodThrows,
-                $visitor->getMethodThrows()
+                $methodThrows
             );
+
+            if ($this->cacheManager !== null) {
+                $this->cacheManager->setMethodThrows($filePath, $methodThrows);
+            }
         } catch (Error) {
             // Ignore parse errors in first pass
         }
