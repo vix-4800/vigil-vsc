@@ -10,9 +10,10 @@ use JsonException;
 use PhpParser\Error;
 use PhpParser\NodeTraverser;
 use PhpParser\ParserFactory;
+use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
-use RegexIterator;
+use SplFileInfo;
 
 /**
  * Class Analyzer
@@ -274,39 +275,31 @@ final class Analyzer
         $excludeDirs = ['vendor', 'node_modules', 'cache', 'var', 'storage', 'temp'];
 
         try {
-            $iterator = new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator(
-                    $directory,
-                    RecursiveDirectoryIterator::SKIP_DOTS
-                )
+            $directoryIterator = new RecursiveDirectoryIterator(
+                $directory,
+                RecursiveDirectoryIterator::SKIP_DOTS
             );
 
-            foreach ($iterator as $file) {
-                if (!$file->isFile()) {
-                    continue;
-                }
-
-                if ($file->getExtension() !== 'php') {
-                    continue;
-                }
-
-                $path = $file->getPathname();
-
-                $skip = false;
-
-                foreach ($excludeDirs as $excludeDir) {
-                    if (str_contains((string) $path, "/{$excludeDir}/")) {
-                        $skip = true;
-
-                        break;
+            // Filter directories at iterator level - more efficient than checking each file
+            $filteredIterator = new RecursiveCallbackFilterIterator(
+                $directoryIterator,
+                static function (SplFileInfo $file) use ($excludeDirs): bool {
+                    // Always allow files
+                    if ($file->isFile()) {
+                        return $file->getExtension() === 'php';
                     }
-                }
 
-                if ($skip) {
-                    continue;
-                }
+                    // Check if directory should be excluded
+                    $basename = $file->getBasename();
 
-                $this->filesToAnalyze[] = $path;
+                    return !in_array($basename, $excludeDirs, true);
+                }
+            );
+
+            $iterator = new RecursiveIteratorIterator($filteredIterator);
+
+            foreach ($iterator as $file) {
+                $this->filesToAnalyze[] = $file->getPathname();
             }
         } catch (Exception) {
             // Ignore errors during file collection
@@ -322,13 +315,27 @@ final class Analyzer
      */
     private function collectFiles(string $directory): void
     {
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($directory)
+        $directoryIterator = new RecursiveDirectoryIterator(
+            $directory,
+            RecursiveDirectoryIterator::SKIP_DOTS
         );
 
-        $phpFiles = new RegexIterator($iterator, '/^.+\.php$/i');
+        // Filter at iterator level - more efficient than RegexIterator
+        $filteredIterator = new RecursiveCallbackFilterIterator(
+            $directoryIterator,
+            static function (SplFileInfo $file): bool {
+                if ($file->isFile()) {
+                    return $file->getExtension() === 'php';
+                }
 
-        foreach ($phpFiles as $file) {
+                // Allow all directories
+                return true;
+            }
+        );
+
+        $iterator = new RecursiveIteratorIterator($filteredIterator);
+
+        foreach ($iterator as $file) {
             $this->filesToAnalyze[] = $file->getPathname();
         }
     }
