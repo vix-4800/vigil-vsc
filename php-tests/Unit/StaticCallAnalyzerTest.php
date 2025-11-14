@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Vix\Vigil\Tests\Unit;
+namespace Vix\ExceptionInspector\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use Vix\Vigil\Analyzer;
+use Vix\ExceptionInspector\Analyzer;
 
 /**
  * Test static method call analysis

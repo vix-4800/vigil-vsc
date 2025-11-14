@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Vix\Vigil;
+namespace Vix\ExceptionInspector;
 
 use Exception;
 use phpDocumentor\Reflection\DocBlockFactory;

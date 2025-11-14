@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Vix\Vigil\Tests\Unit;
+namespace Vix\ExceptionInspector\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use Vix\Vigil\Command\AnalyzeCommand;
+use Vix\ExceptionInspector\Command\AnalyzeCommand;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
 

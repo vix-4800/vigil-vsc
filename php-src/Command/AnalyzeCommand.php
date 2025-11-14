@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Vix\Vigil\Command;
+namespace Vix\ExceptionInspector\Command;
 
 use Exception;
 use Symfony\Component\Console\Command\Command;
@@ -10,7 +10,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Vix\Vigil\Analyzer;
+use Vix\ExceptionInspector\Analyzer;
 
 /**
  * Command to analyze PHP files for @throws documentation

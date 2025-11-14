@@ -1,5 +1,5 @@
 {
-    "name": "vix/vigil",
+    "name": "vix/php-exception-inspector",
     "description": "PHP @throws analyzer with JSON output for IDE integration",
     "type": "project",
     "license": "MIT",
@@ -14,16 +14,16 @@
     },
     "autoload": {
         "psr-4": {
-            "Vix\\Vigil\\": "src/"
+            "Vix\\ExceptionInspector\\": "php-src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Vix\\Vigil\\Tests\\": "tests/"
+            "Vix\\ExceptionInspector\\Tests\\": "php-tests/"
         }
     },
     "bin": [
-        "bin/vigil"
+        "php-bin/php-exception-inspector"
     ],
     "config": {
         "sort-packages": true

@@ -17,9 +17,9 @@ foreach ($autoloadPaths as $autoloadPath) {
 }
 
 use Symfony\Component\Console\Application;
-use Vix\Vigil\Command\AnalyzeCommand;
+use Vix\ExceptionInspector\Command\AnalyzeCommand;
 
-$application = new Application('Vigil', '0.1.0');
+$application = new Application('PHP Exception Inspector', '0.1.0');
 $application->add(new AnalyzeCommand());
 $application->setDefaultCommand('analyze', true);
 

@@ -45,7 +45,7 @@ class MenuService
      * Get menu categories
      *
      * This method calls MenuCategory::find() which declares @throws InvalidConfigException
-     * Previously Vigil would report this as missing, but now it should recognize it
+     * Previously Inspector would report this as missing, but now it should recognize it
      *
      * @return array
      *

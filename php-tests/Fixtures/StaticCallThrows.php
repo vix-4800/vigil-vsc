@@ -1,6 +1,6 @@
 <?php
 
-namespace Vix\Vigil\Tests\Fixtures;
+namespace Vix\ExceptionInspector\Tests\Fixtures;
 
 use yii\base\InvalidConfigException;
 

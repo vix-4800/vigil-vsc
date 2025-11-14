@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Vix\Vigil\Tests\Unit;
+namespace Vix\ExceptionInspector\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use PhpParser\NodeTraverser;
 use PhpParser\ParserFactory;
-use Vix\Vigil\ThrowsVisitor;
+use Vix\ExceptionInspector\ThrowsVisitor;
 
 class ThrowsVisitorTest extends TestCase
 {

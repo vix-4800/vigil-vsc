@@ -7,7 +7,7 @@
     failOnWarning="true"
     cacheDirectory=".phpunit.cache">
     <testsuites>
-        <testsuite name="Vigil Test Suite">
+        <testsuite name="PHP Exception Inspector Test Suite">
             <directory>tests/Unit</directory>
         </testsuite>
     </testsuites>
