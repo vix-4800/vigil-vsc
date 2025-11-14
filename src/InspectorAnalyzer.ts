@@ -33,9 +33,11 @@ export class InspectorAnalyzer {
   private diagnosticCollection: vscode.DiagnosticCollection;
   private outputChannel: vscode.OutputChannel;
   private statusBarItem: vscode.StatusBarItem;
+  private extensionPath: string;
 
-  constructor(diagnosticCollection: vscode.DiagnosticCollection) {
+  constructor(diagnosticCollection: vscode.DiagnosticCollection, extensionPath: string) {
     this.diagnosticCollection = diagnosticCollection;
+    this.extensionPath = extensionPath;
     this.outputChannel = vscode.window.createOutputChannel('PHP Exception Inspector');
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   }
@@ -44,17 +46,10 @@ export class InspectorAnalyzer {
    * Find Inspector executable path in the extension's php-bin directory
    */
   private findInspectorExecutable(): string | null {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-      return null;
-    }
+    const inspectorPath = path.join(this.extensionPath, 'php-bin', 'php-exception-inspector');
 
-    // Look for php-bin/php-exception-inspector in workspace root
-    for (const folder of workspaceFolders) {
-      const inspectorPath = path.join(folder.uri.fsPath, 'php-bin', 'php-exception-inspector');
-      if (fs.existsSync(inspectorPath)) {
-        return inspectorPath;
-      }
+    if (fs.existsSync(inspectorPath)) {
+      return inspectorPath;
     }
 
     return null;

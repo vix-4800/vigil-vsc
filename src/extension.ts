@@ -12,7 +12,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(diagnosticCollection);
 
   // Initialize analyzer
-  analyzer = new InspectorAnalyzer(diagnosticCollection);
+  analyzer = new InspectorAnalyzer(diagnosticCollection, context.extensionPath);
 
   // Register command to manually analyze current file
   const analyzeCommand = vscode.commands.registerCommand(

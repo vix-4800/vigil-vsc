@@ -10,7 +10,9 @@ suite('InspectorAnalyzer Test Suite', () => {
     diagnosticCollection = vscode.languages.createDiagnosticCollection(
       'php-exception-inspector-test'
     );
-    analyzer = new InspectorAnalyzer(diagnosticCollection);
+
+    const mockExtensionPath = '/mock/extension/path';
+    analyzer = new InspectorAnalyzer(diagnosticCollection, mockExtensionPath);
   });
 
   teardown(() => {
