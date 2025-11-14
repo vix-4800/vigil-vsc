@@ -19,12 +19,16 @@ use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Catch_;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\Node\Stmt\Trait_;
 use PhpParser\Node\Stmt\TryCatch;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\NodeVisitorAbstract;
+
+// Suppress "Type is not used" warning - Catch_ is used in instanceof checks
+// phpcs:disable SlevomatCodingStandard.Namespaces.UnusedUses
 
 /**
  * Visitor to analyze @throws declarations and thrown exceptions
@@ -111,6 +115,14 @@ final class ThrowsVisitor extends NodeVisitorAbstract
      * @var array<int, string[]>
      */
     private array $tryCatchStack = [];
+
+    /**
+     * Tracks the depth of catch blocks we're currently inside
+     * When > 0, we're inside a catch block and exceptions thrown there should not be considered caught
+     *
+     * @var int
+     */
+    private int $catchBlockDepth = 0;
 
     /**
      * Map of class names to their parent class names
@@ -250,6 +262,10 @@ final class ThrowsVisitor extends NodeVisitorAbstract
         if ($node instanceof TryCatch) {
             $this->enterTryCatch($node);
         }
+
+        if ($node instanceof Catch_) {
+            $this->catchBlockDepth++;
+        }
     }
 
     /**
@@ -267,6 +283,10 @@ final class ThrowsVisitor extends NodeVisitorAbstract
 
         if ($node instanceof TryCatch) {
             $this->leaveTryCatch();
+        }
+
+        if ($node instanceof Catch_) {
+            $this->catchBlockDepth--;
         }
 
         if (!$node instanceof Function_ && !$node instanceof ClassMethod) {
@@ -632,6 +652,7 @@ final class ThrowsVisitor extends NodeVisitorAbstract
 
     /**
      * Check if exception is caught in current try-catch context
+     * Exceptions thrown inside catch blocks are NOT considered caught by that same catch
      *
      * @param string $exceptionType Exception type to check
      *
@@ -640,6 +661,11 @@ final class ThrowsVisitor extends NodeVisitorAbstract
     private function isExceptionCaught(string $exceptionType): bool
     {
         if ($this->tryCatchStack === []) {
+            return false;
+        }
+
+        // If we're inside a catch block, exceptions thrown there are not caught
+        if ($this->catchBlockDepth > 0) {
             return false;
         }
 
@@ -675,6 +701,9 @@ final class ThrowsVisitor extends NodeVisitorAbstract
 
     /**
      * Check if thrown exception matches declared exception
+     * Thrown exception matches declared if:
+     * 1. They are the same exception
+     * 2. Thrown is a subclass of declared (thrown extends declared)
      *
      * @param string $thrown   Thrown exception type
      * @param string $declared Declared exception type
@@ -708,7 +737,10 @@ final class ThrowsVisitor extends NodeVisitorAbstract
             return true;
         }
 
-        return $this->isParentException($thrownNormalized, $declaredNormalized);
+        // Check if declared is a parent of thrown (thrown extends declared)
+        // This means: throwing InvalidArgumentException is OK when Exception is declared
+        // But: throwing Exception is NOT OK when InvalidArgumentException is declared
+        return $this->isThrownSubclassOfDeclared($thrownNormalized, $declaredNormalized);
     }
 
     /**
@@ -736,15 +768,16 @@ final class ThrowsVisitor extends NodeVisitorAbstract
     }
 
     /**
-     * Check if declared exception is a parent of thrown exception
+     * Check if thrown exception is a subclass of declared exception
      * This uses both collected class hierarchy and is_subclass_of with autoloading
+     * Returns true only if: thrown extends declared (one-directional check)
      *
      * @param string $thrown   Thrown exception type (normalized with leading backslash)
      * @param string $declared Declared exception type (normalized with leading backslash)
      *
-     * @return bool `True` if declared is parent of thrown, `false` otherwise
+     * @return bool `True` if thrown is a subclass of declared, `false` otherwise
      */
-    private function isParentException(string $thrown, string $declared): bool
+    private function isThrownSubclassOfDeclared(string $thrown, string $declared): bool
     {
         $thrownClass = ltrim($thrown, '\\');
         $declaredClass = ltrim($declared, '\\');
@@ -754,6 +787,8 @@ final class ThrowsVisitor extends NodeVisitorAbstract
         }
 
         try {
+            // is_subclass_of($child, $parent) returns true if $child extends $parent
+            // So we check: is thrown a subclass of declared?
             return is_subclass_of($thrownClass, $declaredClass, true);
         } catch (Exception) {
             return false;
