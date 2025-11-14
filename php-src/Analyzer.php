@@ -57,6 +57,9 @@ final class Analyzer
      * @param bool   $useProjectWideAnalysis Whether to scan entire project for context
      *
      * @return array<string, mixed> Analysis results
+     *
+     * @throws InvalidArgumentException
+     * @throws JsonException
      */
     public function analyze(string $path, bool $useProjectWideAnalysis = true): array
     {
@@ -139,6 +142,8 @@ final class Analyzer
      * @param string $projectRoot Project root directory
      *
      * @return void
+     *
+     * @throws JsonException
      */
     private function collectProjectFiles(string $projectRoot): void
     {
