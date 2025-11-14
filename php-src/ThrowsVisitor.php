@@ -577,11 +577,7 @@ final class ThrowsVisitor extends NodeVisitorAbstract
         if ($expr instanceof New_ && $expr->class instanceof Name) {
             $name = $expr->class->toString();
 
-            if ($expr->class->isFullyQualified()) {
-                return '\\' . ltrim($name, '\\');
-            }
-
-            return $name;
+            return ltrim($name, '\\');
         }
 
         if ($expr instanceof Variable) {
