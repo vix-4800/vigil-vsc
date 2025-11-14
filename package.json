@@ -84,7 +84,8 @@
         "watch": "tsc -watch -p ./",
         "pretest": "npm run compile && npm run lint",
         "test": "node ./out/test/runTest.js",
-        "lint": "eslint src --ext ts"
+        "lint": "eslint src --ext ts",
+        "prepare": "husky"
     },
     "devDependencies": {
         "@eslint/js": "^9.39.1",
@@ -97,6 +98,7 @@
         "eslint": "^9.0",
         "glob": "^11.0.0",
         "globals": "^16.5.0",
+        "husky": "^9.1.7",
         "mocha": "^11.0",
         "typescript": "^5.0"
     }
