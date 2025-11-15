@@ -406,6 +406,10 @@ final class Analyzer
 
             foreach ($iterator as $file) {
                 try {
+                    if (!$file->isFile()) {
+                        continue;
+                    }
+
                     $filePath = $file->getPathname();
 
                     if ($this->shouldExcludeFile($filePath)) {
@@ -455,6 +459,10 @@ final class Analyzer
 
             foreach ($iterator as $file) {
                 try {
+                    if (!$file->isFile()) {
+                        continue;
+                    }
+
                     $filePath = $file->getPathname();
 
                     if ($this->shouldExcludeFile($filePath)) {
