@@ -385,7 +385,19 @@ final class Analyzer
     private function collectFilesExcludingVendor(string $directory): void
     {
         $excludeDirs = ['vendor', 'node_modules', 'cache', 'var', 'storage', 'temp', 'assets', 'public', 'web'];
+        $this->collectFiles($directory, $excludeDirs);
+    }
 
+    /**
+     * Collect all PHP files in a directory
+     *
+     * @param string   $directory   Directory path
+     * @param string[] $excludeDirs Directory names to exclude (optional)
+     *
+     * @return void
+     */
+    private function collectFiles(string $directory, array $excludeDirs = []): void
+    {
         try {
             $directoryIterator = new RecursiveDirectoryIterator(
                 $directory,
@@ -394,15 +406,7 @@ final class Analyzer
 
             $filteredIterator = new RecursiveCallbackFilterIterator(
                 $directoryIterator,
-                static function (SplFileInfo $file) use ($excludeDirs): bool {
-                    if ($file->isFile()) {
-                        return $file->getExtension() === 'php' && $file->isReadable();
-                    }
-
-                    $basename = $file->getBasename();
-
-                    return !in_array($basename, $excludeDirs, true);
-                }
+                $this->createFileFilter($excludeDirs)
             );
 
             $iterator = new RecursiveIteratorIterator($filteredIterator);
@@ -430,53 +434,27 @@ final class Analyzer
     }
 
     /**
-     * Collect all PHP files in a directory
+     * Create a filter callback for RecursiveCallbackFilterIterator
      *
-     * @param string $directory Directory path
+     * @param string[] $excludeDirs Directory names to exclude
      *
-     * @return void
+     * @return callable
      */
-    private function collectFiles(string $directory): void
+    private function createFileFilter(array $excludeDirs): callable
     {
-        $directoryIterator = new RecursiveDirectoryIterator(
-            $directory,
-            RecursiveDirectoryIterator::SKIP_DOTS
-        );
+        return static function (SplFileInfo $file) use ($excludeDirs): bool {
+            if ($file->isFile()) {
+                return $file->getExtension() === 'php' && $file->isReadable();
+            }
 
-        $filteredIterator = new RecursiveCallbackFilterIterator(
-            $directoryIterator,
-            static function (SplFileInfo $file): bool {
-                if ($file->isFile()) {
-                    return $file->getExtension() === 'php' && $file->isReadable();
-                }
-
+            if ($excludeDirs === []) {
                 return true;
             }
-        );
 
-        try {
-            $iterator = new RecursiveIteratorIterator($filteredIterator);
+            $basename = $file->getBasename();
 
-            foreach ($iterator as $file) {
-                try {
-                    if (!$file->isFile()) {
-                        continue;
-                    }
-
-                    $filePath = $file->getPathname();
-
-                    if ($this->shouldExcludeFile($filePath)) {
-                        continue;
-                    }
-
-                    $this->filesToAnalyze[] = $filePath;
-                } catch (Exception $e) {
-                    error_log("PHP Exception Inspector: Skipping file due to error: {$e->getMessage()}");
-                }
-            }
-        } catch (Exception $e) {
-            error_log("PHP Exception Inspector: Error scanning directory {$directory}: {$e->getMessage()}");
-        }
+            return !in_array($basename, $excludeDirs, true);
+        };
     }
 
     /**
@@ -538,7 +516,8 @@ final class Analyzer
             if ($this->cacheManager !== null) {
                 $this->cacheManager->setMethodThrows($filePath, $methodThrows);
             }
-        } catch (Error) {
+        } catch (Error $e) {
+            error_log("PHP Exception Inspector: Parse error in {$filePath}: {$e->getMessage()}");
         }
     }
 
