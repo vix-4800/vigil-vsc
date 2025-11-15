@@ -15,7 +15,7 @@ require_once $autoloadPath;
 use Symfony\Component\Console\Application;
 use Vix\ExceptionInspector\Command\AnalyzeCommand;
 
-$application = new Application('PHP Exception Inspector', '0.1.8');
+$application = new Application('PHP Exception Inspector', '0.1.9');
 $application->add(new AnalyzeCommand());
 $application->setDefaultCommand('analyze', true);
 

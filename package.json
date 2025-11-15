@@ -8,7 +8,7 @@
         "type": "git",
         "url": "https://github.com/vix-4800/php-exception-inspector-vsc.git"
     },
-    "version": "0.1.8",
+    "version": "0.1.9",
     "engines": {
         "vscode": "^1.105.0"
     },
