@@ -57,23 +57,6 @@ final class CacheManager
     }
 
     /**
-     * Build cache file path in system temp directory
-     *
-     * @param string $projectRoot Project root directory
-     *
-     * @return string Cache file path
-     */
-    private function buildCacheFilePath(string $projectRoot): string
-    {
-        $tempDir = sys_get_temp_dir();
-
-        $projectHash = md5($projectRoot);
-        $cacheFileName = "php-exception-inspector-{$projectHash}.json";
-
-        return "{$tempDir}/{$cacheFileName}";
-    }
-
-    /**
      * Get the cache file path for this instance
      *
      * @return string Cache file path
@@ -330,6 +313,23 @@ final class CacheManager
             'total_files' => count($this->cache['files'] ?? []),
             'cache_size_bytes' => $cacheSize !== false ? $cacheSize : 0,
         ];
+    }
+
+    /**
+     * Build cache file path in system temp directory
+     *
+     * @param string $projectRoot Project root directory
+     *
+     * @return string Cache file path
+     */
+    private function buildCacheFilePath(string $projectRoot): string
+    {
+        $tempDir = sys_get_temp_dir();
+
+        $projectHash = md5($projectRoot);
+        $cacheFileName = "php-exception-inspector-{$projectHash}.json";
+
+        return "{$tempDir}/{$cacheFileName}";
     }
 
     /**

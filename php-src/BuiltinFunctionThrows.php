@@ -175,28 +175,25 @@ final class BuiltinFunctionThrows
      * Check if function call arguments satisfy throw conditions
      * Returns true if the function WILL throw, false if it WON'T throw, null if unknown
      *
-     * @param string $functionName Function name
-     * @param array<Arg> $args Function arguments
+     * @param string     $functionName Function name
+     * @param array<Arg> $args         Function arguments
      *
      * @return bool|null True if will throw, false if won't throw, null if cannot determine
      */
     public static function willThrowWithArgs(string $functionName, array $args): ?bool
     {
-        switch ($functionName) {
-            case 'json_encode':
-                return self::hasJsonThrowOnErrorFlag($args, 1);
-            case 'json_decode':
-                return self::hasJsonThrowOnErrorFlag($args, 3);
-            default:
-                return true;
-        }
+        return match ($functionName) {
+            'json_encode' => self::hasJsonThrowOnErrorFlag($args, 1),
+            'json_decode' => self::hasJsonThrowOnErrorFlag($args, 3),
+            default => true,
+        };
     }
 
     /**
      * Check if JSON_THROW_ON_ERROR flag is present in function arguments
      *
-     * @param array<Arg> $args Function arguments
-     * @param int $flagPosition Position of flags argument (0-based)
+     * @param array<Arg> $args         Function arguments
+     * @param int        $flagPosition Position of flags argument (0-based)
      *
      * @return bool|null True if flag is present, false if explicitly not present, null if cannot determine
      */
@@ -231,21 +228,24 @@ final class BuiltinFunctionThrows
     /**
      * Recursively check if a flag constant is present in a bitwise OR expression
      *
-     * @param BitwiseOr $expr Bitwise OR expression
-     * @param string $flagName Flag constant name to search for
+     * @param BitwiseOr $expr     Bitwise OR expression
+     * @param string    $flagName Flag constant name to search for
      *
      * @return bool True if flag is found
      */
     private static function hasFlagInBitwiseOr(BitwiseOr $expr, string $flagName): bool
     {
-        return self::checkBitwiseOrSide($expr->left, $flagName)
-            || self::checkBitwiseOrSide($expr->right, $flagName);
+        if (self::checkBitwiseOrSide($expr->left, $flagName)) {
+            return true;
+        }
+
+        return self::checkBitwiseOrSide($expr->right, $flagName);
     }
 
     /**
      * Check one side of a bitwise OR expression for the flag
      *
-     * @param Expr $side Expression side to check
+     * @param Expr   $side     Expression side to check
      * @param string $flagName Flag constant name to search for
      *
      * @return bool True if flag is found

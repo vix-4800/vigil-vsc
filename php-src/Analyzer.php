@@ -131,23 +131,30 @@ final class Analyzer
                 if ($this->projectRoot !== null) {
                     if (!$disableCache) {
                         $this->cacheManager = new CacheManager($this->projectRoot);
+
                         if ($clearCache) {
                             $this->cacheManager->clear();
                         }
+
                         $this->cacheManager->load();
                     }
+
                     $this->collectProjectFiles($this->projectRoot);
                 }
             }
         } elseif (is_dir($path)) {
             $this->projectRoot = $path;
+
             if (!$disableCache) {
                 $this->cacheManager = new CacheManager($this->projectRoot);
+
                 if ($clearCache) {
                     $this->cacheManager->clear();
                 }
+
                 $this->cacheManager->load();
             }
+
             $this->collectFiles($path);
         } else {
             throw new InvalidArgumentException("Path does not exist: {$path}");
