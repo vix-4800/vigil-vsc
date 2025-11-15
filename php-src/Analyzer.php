@@ -390,7 +390,7 @@ final class Analyzer
                 $directoryIterator,
                 static function (SplFileInfo $file) use ($excludeDirs): bool {
                     if ($file->isFile()) {
-                        return $file->getExtension() === 'php';
+                        return $file->getExtension() === 'php' && $file->isReadable();
                     }
 
                     $basename = $file->getBasename();
@@ -404,9 +404,11 @@ final class Analyzer
             foreach ($iterator as $file) {
                 $filePath = $file->getPathname();
 
-                if (!$this->shouldExcludeFile($filePath)) {
-                    $this->filesToAnalyze[] = $filePath;
+                if ($this->shouldExcludeFile($filePath)) {
+                    continue;
                 }
+
+                $this->filesToAnalyze[] = $filePath;
             }
         } catch (Exception) {
         }
@@ -430,7 +432,7 @@ final class Analyzer
             $directoryIterator,
             static function (SplFileInfo $file): bool {
                 if ($file->isFile()) {
-                    return $file->getExtension() === 'php';
+                    return $file->getExtension() === 'php' && $file->isReadable();
                 }
 
                 return true;
@@ -442,9 +444,11 @@ final class Analyzer
         foreach ($iterator as $file) {
             $filePath = $file->getPathname();
 
-            if (!$this->shouldExcludeFile($filePath)) {
-                $this->filesToAnalyze[] = $filePath;
+            if ($this->shouldExcludeFile($filePath)) {
+                continue;
             }
+
+            $this->filesToAnalyze[] = $filePath;
         }
     }
 
@@ -479,6 +483,13 @@ final class Analyzer
 
         try {
             $code = file_get_contents($filePath);
+
+            if ($code === false) {
+                error_log("PHP Exception Inspector: Failed to read file: {$filePath}");
+
+                return;
+            }
+
             $ast = $parser->parse($code);
 
             if ($ast === null) {
@@ -519,6 +530,13 @@ final class Analyzer
 
         try {
             $code = file_get_contents($filePath);
+
+            if ($code === false) {
+                error_log("PHP Exception Inspector: Failed to read file: {$filePath}");
+
+                return;
+            }
+
             $ast = $parser->parse($code);
 
             if ($ast === null) {
