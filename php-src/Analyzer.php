@@ -38,6 +38,14 @@ final class Analyzer
     private array $globalMethodThrows = [];
 
     /**
+     * Global map of class inheritance hierarchy
+     * Format: ['Namespace\ChildClass' => 'Namespace\ParentClass']
+     *
+     * @var array<string, string>
+     */
+    private array $globalClassHierarchy = [];
+
+    /**
      * List of all files to analyze
      *
      * @var string[]
@@ -114,6 +122,7 @@ final class Analyzer
             'performance' => [],
         ];
         $this->globalMethodThrows = [];
+        $this->globalClassHierarchy = [];
         $this->filesToAnalyze = [];
         $this->perfStats = [
             'cache_hits' => 0,
@@ -501,16 +510,22 @@ final class Analyzer
                 return;
             }
 
-            $visitor = new ThrowsVisitor($filePath, $this->globalMethodThrows);
+            $visitor = new ThrowsVisitor($filePath, $this->globalMethodThrows, $this->globalClassHierarchy);
             $traverser = new NodeTraverser();
             $traverser->addVisitor($visitor);
             $traverser->traverse($ast);
 
             $methodThrows = $visitor->getMethodThrows();
+            $classHierarchy = $visitor->getClassHierarchy();
 
             $this->globalMethodThrows = array_merge(
                 $this->globalMethodThrows,
                 $methodThrows
+            );
+
+            $this->globalClassHierarchy = array_merge(
+                $this->globalClassHierarchy,
+                $classHierarchy
             );
 
             if ($this->cacheManager !== null) {
@@ -549,7 +564,7 @@ final class Analyzer
                 return;
             }
 
-            $visitor = new ThrowsVisitor($filePath, $this->globalMethodThrows);
+            $visitor = new ThrowsVisitor($filePath, $this->globalMethodThrows, $this->globalClassHierarchy);
             $traverser = new NodeTraverser();
             $traverser->addVisitor($visitor);
             $traverser->traverse($ast);

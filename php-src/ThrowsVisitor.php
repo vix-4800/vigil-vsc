@@ -142,14 +142,19 @@ final class ThrowsVisitor extends NodeVisitorAbstract
     /**
      * Constructor
      *
-     * @param string                  $filePath           File path being analyzed
-     * @param array<string, string[]> $globalMethodThrows Global method throws map
+     * @param string                  $filePath              File path being analyzed
+     * @param array<string, string[]> $globalMethodThrows    Global method throws map
+     * @param array<string, string>   $globalClassHierarchy  Global class hierarchy map
      *
      * @return void
      */
-    public function __construct(private readonly string $filePath, private array $globalMethodThrows = [])
-    {
+    public function __construct(
+        private readonly string $filePath,
+        private array $globalMethodThrows = [],
+        array $globalClassHierarchy = []
+    ) {
         $this->docBlockFactory = DocBlockFactory::createInstance();
+        $this->classHierarchy = $globalClassHierarchy;
     }
 
     /**
@@ -170,6 +175,16 @@ final class ThrowsVisitor extends NodeVisitorAbstract
     public function getMethodThrows(): array
     {
         return $this->methodThrows;
+    }
+
+    /**
+     * Get class hierarchy discovered in this file
+     *
+     * @return array<string, string>
+     */
+    public function getClassHierarchy(): array
+    {
+        return $this->classHierarchy;
     }
 
     /**
